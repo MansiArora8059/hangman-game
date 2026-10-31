@@ -1,22 +1,21 @@
 import os
-from dotenv import load_dotenv
+import sys
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL
 
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
-print("DB_USER loaded:", bool(os.getenv("DB_USER")))
-print("DB_PASSWORD loaded:", bool(os.getenv("DB_PASSWORD")))
+# Handle path for PyInstaller bundled files
+if getattr(sys, "frozen", False):
+    # PyInstaller extracts bundled data to _MEIPASS
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+else:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
-connection_url = URL.create(
-    drivername="postgresql+psycopg2",
-    username=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST", "localhost"),
-    port=int(os.getenv("DB_PORT", "5432")),
-    database=os.getenv("DB_NAME", "hangman_db")
+db_path = os.path.join(base_dir, "hangman.db")
+
+# SQLite connection configuration
+engine = create_engine(
+    f"sqlite:///{db_path}",
+    connect_args={"check_same_thread": False}
 )
-
-engine = create_engine(connection_url)
 
 
 def get_high_score(player_name="Player"):
@@ -29,13 +28,11 @@ def get_high_score(player_name="Player"):
             """),
             {"player_name": player_name}
         )
-
         return result.scalar()
 
 
 def save_high_score(score, player_name="Player"):
     with engine.begin() as connection:
-
         current_score = connection.execute(
             text("""
                 SELECT MAX(high_score)
@@ -54,7 +51,6 @@ def save_high_score(score, player_name="Player"):
                 """),
                 {"player_name": player_name, "score": score}
             )
-
         elif score > current_score:
             connection.execute(
                 text("""
@@ -79,23 +75,4 @@ def get_random_word(level):
             """),
             {"level": level}
         )
-
         return result.scalar()
-
-
-if __name__ == "__main__":
-    print("Testing database connection...")
-
-    with engine.connect() as connection:
-        result = connection.execute(
-            text("SELECT current_database(), current_schema()")
-        )
-        print("Database:", result.fetchone())
-
-    print("Testing High Score...")
-    print("Current High Score:", get_high_score())
-
-    save_high_score(10)
-
-    print("Updated High Score:", get_high_score())
-
